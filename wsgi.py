@@ -92,7 +92,7 @@ def homepage():
     the_time = datetime.now().strftime("%A,%b %b %Y :%M")
 
     return """
-    <meta http-equiv="Refresh" content="20" />
+    <meta http-equiv="Refresh" content="300" />
     <h1>Hello Friends form openshift 2020</h1>
     <p>It is currently {time}.</p>
     <img src="/1.jpg" />
