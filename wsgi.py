@@ -93,7 +93,7 @@ def homepage():
 
     return """
     <meta http-equiv="Refresh" content="20" />
-    <h1>Hello Friends form ubuntu mac 2020</h1>
+    <h1>Hello Friends form openshift 2020</h1>
     <p>It is currently {time}.</p>
     <img src="/1.jpg" />
     <p>lala</p>
