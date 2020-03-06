@@ -5,8 +5,8 @@ from flask_sockets import Sockets
 from datetime import datetime
 from requests import get,post
 import re
-app = Flask(__name__)
-sockets = Sockets(app)
+application = Flask(__name__)
+sockets = Sockets(application)
 
 @sockets.route('/echo')
 def echo_socket(ws):
@@ -20,7 +20,7 @@ class RegexConverter(BaseConverter):
     def __init__(self, map, *args):
         self.map = map
         self.regex = args[0]
-app.url_map.converters['regex'] = RegexConverter
+application.url_map.converters['regex'] = RegexConverter
 
 
 # Filters.
@@ -87,7 +87,7 @@ def realpath(path,relative_path):
     num = relative_path.count('../')
     return rstrip_path(path,num)
 
-@app.route('/')
+@application.route('/')
 def homepage():
     the_time = datetime.now().strftime("%A,%b %b %Y :%M")
 
@@ -100,7 +100,7 @@ def homepage():
     """.format(time=the_time)
 
 
-@app.route('/1.jpg')
+@application.route('/1.jpg')
 def getimage():
     image_binary = get("https://loremflickr.com/600/400").content
     response = make_response(image_binary)
@@ -109,21 +109,21 @@ def getimage():
     return response
 
 
-@app.route('/p/<protocol>/<regex(".*"):url>',methods=['GET', 'POST'])
+@application.route('/p/<protocol>/<regex(".*"):url>',methods=['GET', 'POST'])
 def hello(protocol,url):
     path = getpath(url)
     host = host_re.match(url)[0]
     root = F"/p/{protocol}/{host}"
-    app.logger.debug(F"path = {path} :: host = {host} :: url = {url}")
+    application.logger.debug(F"path = {path} :: host = {host} :: url = {url}")
     url = F"{protocol}://{url}"
 
-    app.logger.debug(F"{protocol} :: {url} :: {request.args.to_dict()}")
+    application.logger.debug(F"{protocol} :: {url} :: {request.args.to_dict()}")
     headers = {'Accept-Language' : request.headers['Accept-Language'],
                'User-Agent' : request.headers['User-Agent']}
     if request.method == 'GET':
         binary = get(url,params = request.args.to_dict(),headers = headers,allow_redirects=False)
     if request.method == 'POST':
-        app.logger.debug(F"POST DADE={request.form.to_dict()}")
+        application.logger.debug(F"POST DADE={request.form.to_dict()}")
         binary = post(url,data = request.form.to_dict())
     if binary.status_code in [302,301]:
 
@@ -145,11 +145,11 @@ def hello(protocol,url):
     # response.headers.clear()
     # for i in binary.headers:
     #     response.headers.add(i,binary.headers[i])
-    # app.logger.debug(response.headers)
+    # application.logger.debug(response.headers)
     response.headers.set('Content-Type',binary.headers['Content-Type'])
   #  response.headers.set('Content-Length',binary.headers['Content-Length'])
     return response
 
 
 if __name__ == "__main__":
-    app.run()
+    application.run()
