@@ -5,6 +5,10 @@ from flask_sockets import Sockets
 from datetime import datetime
 from requests import get,post
 import re,struct,gc
+# from gevent import socket
+from gevent import socket
+import gevent
+
 application = Flask(__name__)
 sockets = Sockets(application)
 IMPLEMENTED_METHODS = (2, 0)
