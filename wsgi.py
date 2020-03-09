@@ -4,16 +4,106 @@ from flask import make_response,request,redirect
 from flask_sockets import Sockets
 from datetime import datetime
 from requests import get,post
-import re
+import re,struct,gc
 application = Flask(__name__)
 sockets = Sockets(application)
+IMPLEMENTED_METHODS = (2, 0)
+
+def ws_remote(ws,remote):
+    while not ws.closed:
+        try:
+            message = ws.receive()
+            remote.sendall(message)
+            del message
+        except Exception as e:
+
+            break
+    ws.close()
+    remote.close()
+
+def local_ws(ws,remote):
+    while not ws.closed:
+        try:
+            r_message = remote.recv(4096)
+            if r_message:
+                ws.send(r_message)
+                del r_message
+
+            else:
+                del r_message
+
+                break
+        except Exception as e:
+            break
+    ws.close()            
+    remote.close()
 
 @sockets.route('/echo')
 def echo_socket(ws):
-    while not ws.closed:
-        message = ws.receive()
-        print(type(message))
-        ws.send(message)
+    recv = ws.receive()
+    if recv[0] != 5:
+        ws.close()
+
+    method = None
+    num_methods = recv[1]
+    methods = [recv[i + 2] for i in range(num_methods)]
+    for imp_method in IMPLEMENTED_METHODS:
+        if imp_method in methods:
+            method = imp_method
+            break
+
+    if method is None:
+        ws.close()
+
+    send_msg = ('\x05' + chr(method)).encode('utf-8')
+
+
+    ws.send(send_msg,binary = True)
+    recv = ws.receive()
+
+
+    if recv[0] != 5 or recv[2] != 0:
+        ws.close()
+
+    addr_type = recv[3]
+    if addr_type == 1:
+        addr = socket.inet_ntoa(recv[4:8])
+    elif addr_type == 3:
+        addr_len = recv[4]
+        addr = socket.gethostbyname(recv[5:5 + addr_len])
+    else:
+        # only ipv4 addr or domain name is supported.
+        ws.close()
+
+    port = recv[-2] * 256 + recv[-1]
+
+    cmd = recv[1]
+    if cmd == 1:
+        server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        r = server_sock.connect_ex((addr,port))
+    else:
+        ws.close()
+ 
+   
+
+    sock_name = server_sock.getsockname()
+
+    server_hex_addr = socket.inet_aton(sock_name[0])
+
+
+
+
+    send_msg= b'\x05\x00\x00\x01' + server_hex_addr  + struct.pack(">H", sock_name[1])
+    ws.send(send_msg)
+
+    forwarders = (gevent.spawn(ws_remote, ws, server_sock),
+                  gevent.spawn(local_ws, ws, server_sock))
+    gevent.joinall(forwarders)
+    server_sock.close()
+    ws.close()
+    gc.collect()
+    print('i quit')
+
 
 from werkzeug.routing import BaseConverter
 class RegexConverter(BaseConverter):
