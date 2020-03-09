@@ -86,28 +86,24 @@ def echo_socket(ws):
         server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         r = server_sock.connect_ex((addr,port))
     else:
-        ws.close()
+        r == 1
  
-   
+    if r == 0:
+        sock_name = server_sock.getsockname()
+        server_hex_addr = socket.inet_aton(sock_name[0])
+        send_msg = b'\x05\x00\x00\x01' + server_hex_addr  + struct.pack(">H", sock_name[1])
+        ws.send(send_msg)
+        forwarders = (gevent.spawn(ws_remote, ws, server_sock),
+                      gevent.spawn(local_ws, ws, server_sock))
+        gevent.joinall(forwarders)
+    else:
+        send_msg = struct.pack("!BBBBIH", 5, 5, 0, 1, 0, 0)
+        ws.send(send_msg)
 
-    sock_name = server_sock.getsockname()
-
-    server_hex_addr = socket.inet_aton(sock_name[0])
-
-
-
-
-    send_msg= b'\x05\x00\x00\x01' + server_hex_addr  + struct.pack(">H", sock_name[1])
-    ws.send(send_msg)
-
-    forwarders = (gevent.spawn(ws_remote, ws, server_sock),
-                  gevent.spawn(local_ws, ws, server_sock))
-    gevent.joinall(forwarders)
     server_sock.close()
     ws.close()
     gc.collect()
     print('i quit')
-
 
 from werkzeug.routing import BaseConverter
 class RegexConverter(BaseConverter):
