@@ -11,84 +11,79 @@ import gevent
 
 application = Flask(__name__)
 sockets = Sockets(application)
+app.total = 0
 IMPLEMENTED_METHODS = (2, 0)
 
 def ws_remote(ws,remote):
-    while not ws.closed:
+    while True:
         try:
             message = ws.receive()
             remote.sendall(message)
             del message
         except Exception as e:
-
             break
     ws.close()
     remote.close()
 
 def local_ws(ws,remote):
-    while not ws.closed:
+    while True:
         try:
             r_message = remote.recv(4096)
             if r_message:
                 ws.send(r_message)
                 del r_message
-
             else:
                 del r_message
-
                 break
         except Exception as e:
             break
-    ws.close()            
     remote.close()
+    ws.close()            
+
+
+def handshake(ws):
+    try:
+        recv = ws.receive()
+        if recv[0] != 5:
+            return False
+        
+        send_msg = (b'\x05\x00')
+        ws.send(send_msg)
+        gevent.sleep(2)
+        recv = ws.receive()
+
+        if recv != None:
+            # print(recv)
+            if recv[0] != 5 or recv[2] != 0:
+                return False
+        else:
+            return False
+        addr_type = recv[3]
+        if addr_type == 1:
+            addr = socket.inet_ntoa(recv[4:8])
+        elif addr_type == 3:
+            addr_len = recv[4]
+            addr = socket.gethostbyname(recv[5:5 + addr_len])
+        else:
+            # only ipv4 addr or domain name is supported.
+            return False
+
+        port = recv[-2] * 256 + recv[-1]
+        if recv[1] == 1:
+            server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            r = server_sock.connect_ex((addr,port))
+            if r == 0:
+                return server_sock
+        else:
+            return False
+    except Exception as e:
+        return False
 
 @sockets.route('/echo')
 def echo_socket(ws):
-    recv = ws.receive()
-    if recv[0] != 5:
-        ws.close()
-
-    method = None
-    num_methods = recv[1]
-    methods = [recv[i + 2] for i in range(num_methods)]
-    for imp_method in IMPLEMENTED_METHODS:
-        if imp_method in methods:
-            method = imp_method
-            break
-
-    if method is None:
-        ws.close()
-
-    send_msg = ('\x05' + chr(method)).encode('utf-8')
-
-
-    ws.send(send_msg,binary = True)
-    recv = ws.receive()
-
-
-    if recv[0] != 5 or recv[2] != 0:
-        ws.close()
-
-    addr_type = recv[3]
-    if addr_type == 1:
-        addr = socket.inet_ntoa(recv[4:8])
-    elif addr_type == 3:
-        addr_len = recv[4]
-        addr = socket.gethostbyname(recv[5:5 + addr_len])
-    else:
-        # only ipv4 addr or domain name is supported.
-        ws.close()
-
-    port = recv[-2] * 256 + recv[-1]
-
-    cmd = recv[1]
-    if cmd == 1:
-        server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        r = server_sock.connect_ex((addr,port))
-    else:
-        r == 1
- 
-    if r == 0:
+    app.total += 1
+    server_sock = handshake(ws)
+    if server_sock:
         sock_name = server_sock.getsockname()
         server_hex_addr = socket.inet_aton(sock_name[0])
         send_msg = b'\x05\x00\x00\x01' + server_hex_addr  + struct.pack(">H", sock_name[1])
@@ -97,13 +92,25 @@ def echo_socket(ws):
                       gevent.spawn(local_ws, ws, server_sock))
         gevent.joinall(forwarders)
     else:
-        send_msg = struct.pack("!BBBBIH", 5, 5, 0, 1, 0, 0)
-        ws.send(send_msg)
+        try:
+            send_msg = struct.pack("!BBBBIH", 5, 5, 0, 1, 0, 0)
+            # print('not good')
+            ws.send(send_msg)
+            ws.close()
+            app.total -= 1
+            # print(F'total = {app.total}')
+            return 
+        except Exception as e:
+            app.total -= 1
+            # print(F'total = {app.total}')
+            return
 
-    server_sock.close()
     ws.close()
     gc.collect()
-    print('i quit')
+    app.total -= 1
+    # print(F'total = {app.total}')
+
+
 
 from werkzeug.routing import BaseConverter
 class RegexConverter(BaseConverter):
